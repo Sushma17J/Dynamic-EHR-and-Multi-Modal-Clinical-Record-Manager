@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 import pandas as pd
@@ -12,6 +11,12 @@ st.set_page_config(
 
 # API configuration
 API_URL = st.secrets["API_URL"].rstrip("/")
+API_KEY = st.secrets["API_KEY"]
+
+# Authentication header
+HEADERS = {
+    "X-API-Key": API_KEY
+}
 
 st.title("🏥 Healthcare EHR Management System")
 st.caption("Dynamic Electronic Health Record Management System")
@@ -41,6 +46,7 @@ if page == "Dashboard":
     try:
         response = requests.get(
             f"{API_URL}/dashboard/stats",
+            headers=HEADERS,
             timeout=20
         )
         response.raise_for_status()
@@ -52,20 +58,25 @@ if page == "Dashboard":
             st.metric("Total Patients", stats.get("total_patients", 0))
 
         with col2:
-            st.metric("Clinical Records", stats.get("total_records", 0))
+            st.metric("Clinical Records", stats.get("total_clinical_records", 0))
 
         with col3:
-            st.metric("Medical Documents", stats.get("total_documents", 0))
+            st.metric("Medical Documents", stats.get("total_medical_documents", 0))
 
     except requests.RequestException as e:
         st.error(f"Could not connect to the API: {e}")
 
 # Patients
 elif page == "Patients":
+
     st.header("Patient Directory")
 
     try:
-        response = requests.get(f"{API_URL}/patients", timeout=20)
+        response = requests.get(
+            f"{API_URL}/patients",
+            headers=HEADERS,
+            timeout=20
+        )
         response.raise_for_status()
 
         patients = response.json()
