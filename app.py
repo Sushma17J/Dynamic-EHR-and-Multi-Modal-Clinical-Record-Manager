@@ -1,389 +1,302 @@
-
 import streamlit as st
 import requests
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
+from datetime import date
 
-# --------------------------------
+# --------------------------------------------------
 # PAGE CONFIGURATION
-# --------------------------------
+# --------------------------------------------------
 
 st.set_page_config(
-    page_title="Healthcare EHR",
+    page_title="MediTrack | Healthcare Management",
     page_icon="🏥",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
-
-# --------------------------------
-# API CONFIGURATION
-# --------------------------------
 
 API_URL = st.secrets["API_URL"].rstrip("/")
 API_KEY = st.secrets["API_KEY"]
 
-HEADERS = {
-    "X-API-Key": API_KEY
-}
+HEADERS = {"X-API-Key": API_KEY}
 
-
-def api_get(endpoint):
-    response = requests.get(
-        f"{API_URL}{endpoint}",
-        headers=HEADERS,
-        timeout=30
-    )
-    response.raise_for_status()
-    return response.json()
-
-
-def api_post(endpoint, data):
-    response = requests.post(
-        f"{API_URL}{endpoint}",
-        headers=HEADERS,
-        json=data,
-        timeout=30
-    )
-    response.raise_for_status()
-    return response.json()
-
-
-# --------------------------------
-# CUSTOM CSS
-# --------------------------------
+# --------------------------------------------------
+# CUSTOM DESIGN
+# --------------------------------------------------
 
 st.markdown("""
 <style>
-
 .stApp {
     background-color: #0B1120;
     color: #E5E7EB;
 }
-
 [data-testid="stSidebar"] {
     background-color: #111B2E;
-    border-right: 1px solid #25334A;
 }
-
-[data-testid="stSidebar"] h1 {
-    color: #FFFFFF;
+[data-testid="stSidebar"] * {
+    color: #E5E7EB;
 }
-
 h1, h2, h3 {
     color: #F8FAFC;
 }
-
-p, label {
-    color: #CBD5E1;
-}
-
-.block-container {
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-    max-width: 1450px;
-}
-
-[data-testid="stMetric"] {
-    background: linear-gradient(135deg, #17263D, #142B3B);
-    border: 1px solid #29445A;
+.metric-card {
+    background: #17243A;
     padding: 22px;
-    border-radius: 15px;
+    border-radius: 14px;
+    border: 1px solid #263750;
 }
-
-[data-testid="stMetricLabel"] {
-    color: #A7B8CC;
+.metric-label {
+    color: #94A3B8;
+    font-size: 14px;
 }
-
-[data-testid="stMetricValue"] {
-    color: #5EEAD4;
+.metric-value {
+    color: #2DD4BF;
+    font-size: 30px;
+    font-weight: bold;
 }
-
-div.stButton > button {
-    background: linear-gradient(90deg, #0D9488, #14B8A6);
+.section-card {
+    background: #17243A;
+    padding: 18px;
+    border-radius: 12px;
+    border: 1px solid #263750;
+    margin-bottom: 12px;
+}
+.stButton > button {
+    background-color: #0D9488;
     color: white;
     border: none;
-    border-radius: 9px;
-    padding: 9px 20px;
-    font-weight: 600;
+    border-radius: 8px;
+    padding: 8px 18px;
 }
-
-div.stButton > button:hover {
-    background: #0F766E;
+.stButton > button:hover {
+    background-color: #0F766E;
     color: white;
 }
-
-div[data-testid="stForm"] {
-    background-color: #142238;
-    padding: 22px;
-    border: 1px solid #29445A;
-    border-radius: 15px;
-}
-
-[data-testid="stDataFrame"] {
-    border: 1px solid #29445A;
-    border-radius: 10px;
-}
-
-hr {
-    border-color: #26374D;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
+# --------------------------------------------------
+# API FUNCTIONS
+# --------------------------------------------------
 
-# --------------------------------
-# SIDEBAR
-# --------------------------------
-
-with st.sidebar:
-
-    st.markdown("# 🏥 MediTrack")
-    st.caption("Electronic Health Record System")
-
-    st.divider()
-
-    page = st.radio(
-        "MAIN MENU",
-        [
-            "Dashboard",
-            "Patients",
-            "Vital Signs",
-            "Medications",
-            "Clinical Records",
-            "Medical Documents"
-        ],
-        label_visibility="visible"
-    )
-
-    st.divider()
-
-    st.markdown("### System Status")
-    st.success("Application interface active")
-    st.caption("Powered by FastAPI + MongoDB")
-
-
-# --------------------------------
-# HEADER
-# --------------------------------
-
-st.markdown(
-    "<h1>Healthcare Management</h1>",
-    unsafe_allow_html=True
-)
-
-st.caption(
-    "Centralized Electronic Health Record Management Platform"
-)
-
-st.divider()
-
-
-# --------------------------------
-# LOAD PATIENTS
-# --------------------------------
-
-def load_patients():
+def api_get(endpoint):
     try:
-        return api_get("/patients")
-    except requests.RequestException as e:
-        st.error(f"Unable to load patients: {e}")
+        response = requests.get(
+            f"{API_URL}{endpoint}",
+            headers=HEADERS,
+            timeout=30
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"API Error: {e}")
+        return None
+
+
+def api_post(endpoint, data):
+    try:
+        response = requests.post(
+            f"{API_URL}{endpoint}",
+            headers=HEADERS,
+            json=data,
+            timeout=30
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"API Error: {e}")
+        if getattr(e, "response", None) is not None:
+            st.error(e.response.text)
+        return None
+
+
+def get_patient_list():
+    result = api_get("/patients")
+
+    if result is None:
         return []
 
+    if isinstance(result, dict):
+        result = result.get("patients", [])
 
-# --------------------------------
+    return result if isinstance(result, list) else []
+
+
+def patient_options():
+    patients = get_patient_list()
+    options = {}
+
+    for patient in patients:
+        patient_id = patient.get("patient_id")
+        if patient_id:
+            name = patient.get("name", "Unknown")
+            options[f"{patient_id} - {name}"] = patient_id
+
+    return options
+
+
+def show_records(data):
+    if data is None:
+        return
+
+    if isinstance(data, dict):
+        data = data.get("records", data.get("medications",
+                    data.get("documents", [])))
+
+    if not data:
+        st.info("No records found.")
+        return
+
+    df = pd.DataFrame(data)
+
+    for column in ["_id", "file_path"]:
+        if column in df.columns:
+            df = df.drop(columns=[column])
+
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
+
+# --------------------------------------------------
+# SIDEBAR NAVIGATION
+# --------------------------------------------------
+
+st.sidebar.markdown("# 🏥 MediTrack")
+st.sidebar.caption("Healthcare Management Platform")
+st.sidebar.divider()
+
+page = st.sidebar.radio(
+    "Navigation",
+    [
+        "Dashboard",
+        "Patients",
+        "Vital Signs",
+        "Medication Management",
+        "Clinical Records",
+        "Medical Documents"
+    ]
+)
+
+st.sidebar.divider()
+st.sidebar.caption("Centralized Electronic Health Records")
+
+
+# ==================================================
 # DASHBOARD
-# --------------------------------
+# ==================================================
 
 if page == "Dashboard":
 
-    st.subheader("Dashboard Overview")
-    st.caption("Live statistics from your healthcare database")
+    st.title("Healthcare Management")
+    st.caption("Centralized Electronic Health Record Management Platform")
 
-    try:
-        stats = api_get("/dashboard/stats")
+    stats = api_get("/dashboard/stats")
 
-        patients_count = stats.get("total_patients", 0)
-        records_count = stats.get("total_clinical_records", 0)
-        documents_count = stats.get("total_medical_documents", 0)
-
+    if stats:
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.metric(
-                "👥 Total Patients",
-                patients_count
-            )
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">Total Patients</div>
+                <div class="metric-value">{stats.get('total_patients', 0)}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
         with col2:
-            st.metric(
-                "📋 Clinical Records",
-                records_count
-            )
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">Clinical Records</div>
+                <div class="metric-value">{stats.get('total_clinical_records', 0)}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
         with col3:
-            st.metric(
-                "📁 Medical Documents",
-                documents_count
-            )
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-label">Medical Documents</div>
+                <div class="metric-value">{stats.get('total_medical_documents', 0)}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        st.divider()
+    st.divider()
+    st.subheader("Patient Overview")
 
-        st.subheader("Patient Overview")
-
-        patient_data = load_patients()
-
-        if patient_data:
-
-            df = pd.DataFrame(patient_data)
-
-            if "patient_id" in df.columns and "name" in df.columns:
-
-                display_columns = [
-                    col for col in
-                    ["patient_id", "name", "age", "gender"]
-                    if col in df.columns
-                ]
-
-                st.dataframe(
-                    df[display_columns].head(10),
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.info("Patient information is available, but some display fields are missing.")
-
-        else:
-            st.info("No patient records available.")
-
-    except requests.RequestException as e:
-        st.error(f"Dashboard API error: {e}")
+    patients = get_patient_list()
+    show_records(patients)
 
 
-# --------------------------------
+# ==================================================
 # PATIENTS
-# --------------------------------
+# ==================================================
 
 elif page == "Patients":
 
-    st.subheader("Patient Directory")
+    st.title("Patient Management")
     st.caption("View registered patient information")
 
-    patient_data = load_patients()
+    patients = get_patient_list()
+    show_records(patients)
 
-    if patient_data:
-
-        df = pd.DataFrame(patient_data)
-
-        st.metric("Registered Patients", len(patient_data))
-
-        st.dataframe(
-            df,
-            use_container_width=True,
-            hide_index=True
-        )
+    if patients:
+        df = pd.DataFrame(patients)
+        csv = df.to_csv(index=False).encode("utf-8")
 
         st.download_button(
-            "⬇ Download Patient Data",
-            data=df.to_csv(index=False),
-            file_name="patient_records.csv",
-            mime="text/csv"
+            "Download Patient Data (CSV)",
+            csv,
+            "patient_data.csv",
+            "text/csv"
         )
 
-    else:
-        st.info("No patient records found.")
 
-
-# --------------------------------
+# ==================================================
 # VITAL SIGNS
-# --------------------------------
+# ==================================================
 
 elif page == "Vital Signs":
 
-    st.subheader("Vital Signs Monitoring")
-    st.caption("Record and monitor patient health measurements")
+    st.title("Vital Signs Monitoring")
+    st.caption("Record and monitor patient vital measurements")
 
-    patient_data = load_patients()
+    options = patient_options()
 
-    if not patient_data:
-
-        st.warning("No patients found. Register patients before adding vital readings.")
-
+    if not options:
+        st.warning("No patients available. Register a patient first.")
     else:
+        selected = st.selectbox("Select Patient", list(options.keys()))
+        patient_id = options[selected]
 
-        patient_options = {
-            f"{p.get('patient_id', '')} - {p.get('name', 'Unknown')}":
-            p.get("patient_id")
-            for p in patient_data
-            if p.get("patient_id")
-        }
+        st.subheader("Add Vital Signs")
 
-        selected_patient = st.selectbox(
-            "Select Patient",
-            list(patient_options.keys())
-        )
-
-        patient_id = patient_options[selected_patient]
-
-        st.divider()
-
-        st.markdown("### Add New Vital Reading")
-
-        with st.form("vital_form"):
+        with st.form("vitals_form"):
 
             col1, col2 = st.columns(2)
 
             with col1:
                 heart_rate = st.number_input(
-                    "Heart Rate (bpm)",
-                    min_value=1,
-                    max_value=300,
-                    value=72
+                    "Heart Rate (bpm)", 1, 300, 72
                 )
-
                 temperature = st.number_input(
-                    "Temperature (°C)",
-                    min_value=25.0,
-                    max_value=45.0,
-                    value=37.0,
-                    step=0.1
+                    "Temperature (°C)", 25.0, 45.0, 37.0, 0.1
+                )
+                spo2 = st.number_input(
+                    "SpO2 (%)", 1, 100, 98
                 )
 
             with col2:
-                spo2 = st.number_input(
-                    "SpO2 (%)",
-                    min_value=1,
-                    max_value=100,
-                    value=98
-                )
-
                 systolic = st.number_input(
-                    "Systolic Blood Pressure (mmHg)",
-                    min_value=1,
-                    max_value=300,
-                    value=120
+                    "Systolic BP", 1, 300, 120
                 )
-
                 diastolic = st.number_input(
-                    "Diastolic Blood Pressure (mmHg)",
-                    min_value=1,
-                    max_value=200,
-                    value=80
+                    "Diastolic BP", 1, 200, 80
                 )
 
-            submitted = st.form_submit_button(
-                "➕ Save Vital Reading",
-                use_container_width=True
-            )
+            submitted = st.form_submit_button("Save Vital Signs")
 
             if submitted:
-
                 if systolic <= diastolic:
-                    st.error("Please check the blood pressure values.")
+                    st.error("Systolic pressure must be greater than diastolic pressure.")
                 else:
-
-                    vital_data = {
+                    payload = {
                         "heart_rate": heart_rate,
                         "temperature": temperature,
                         "spo2": spo2,
@@ -393,142 +306,265 @@ elif page == "Vital Signs":
                         }
                     }
 
-                    try:
-                        result = api_post(
-                            f"/vitals/{patient_id}",
-                            vital_data
-                        )
+                    result = api_post(
+                        f"/vitals/{patient_id}",
+                        payload
+                    )
 
-                        st.success(result.get(
-                            "message",
-                            "Vital reading saved successfully!"
-                        ))
-
+                    if result is not None:
+                        st.success("Vital signs saved successfully!")
                         st.rerun()
 
-                    except requests.RequestException as e:
-                        st.error(f"Could not save vital reading: {e}")
-
         st.divider()
+        st.subheader("Vital Signs History")
 
-        # VITAL HISTORY
+        history = api_get(f"/vitals/history/{patient_id}")
 
-        st.markdown("### Vital Signs History")
+        if history:
+            df = pd.DataFrame(history)
+            st.dataframe(df, use_container_width=True, hide_index=True)
 
-        try:
-
-            history = api_get(
-                f"/vitals/history/{patient_id}"
-            )
-
-            if history:
-
-                history_df = pd.DataFrame(history)
-
-                if "recorded_at" in history_df.columns:
-                    history_df["recorded_at"] = pd.to_datetime(
-                        history_df["recorded_at"],
-                        errors="coerce",
-                        utc=True
-                    )
-
-                    history_df = history_df.sort_values(
-                        "recorded_at"
-                    )
-
-                st.dataframe(
-                    history_df,
-                    use_container_width=True,
-                    hide_index=True
+            if "heart_rate" in df.columns:
+                st.subheader("Heart Rate Trend")
+                st.plotly_chart(
+                    px.line(
+                        df,
+                        y="heart_rate",
+                        title="Heart Rate History",
+                        markers=True
+                    ),
+                    use_container_width=True
                 )
 
-                # Heart rate chart
-                if "heart_rate" in history_df.columns:
 
-                    st.markdown("#### ❤️ Heart Rate Trend")
+# ==================================================
+# MEDICATION MANAGEMENT
+# ==================================================
 
-                    fig = px.line(
-                        history_df,
-                        x="recorded_at",
-                        y="heart_rate",
-                        markers=True,
-                        title="Heart Rate Over Time",
-                        labels={
-                            "recorded_at": "Recorded Time",
-                            "heart_rate": "Heart Rate (bpm)"
-                        }
+elif page == "Medication Management":
+
+    st.title("Medication Management")
+    st.caption("Add and view patient medication information")
+
+    options = patient_options()
+
+    if not options:
+        st.warning("No patients available. Register a patient first.")
+    else:
+        selected = st.selectbox(
+            "Select Patient",
+            list(options.keys()),
+            key="med_patient"
+        )
+        patient_id = options[selected]
+
+        st.subheader("Add Medication")
+
+        with st.form("medication_form"):
+
+            medication_name = st.text_input("Medication Name")
+            dosage = st.text_input("Dosage", placeholder="Example: 500 mg")
+            frequency = st.text_input(
+                "Frequency",
+                placeholder="Example: Twice daily"
+            )
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                start_date = st.date_input(
+                    "Start Date",
+                    value=date.today()
+                )
+
+            with col2:
+                end_date = st.date_input(
+                    "End Date",
+                    value=date.today()
+                )
+
+            status = st.selectbox(
+                "Medication Status",
+                ["Active", "Completed", "Discontinued"]
+            )
+
+            submitted = st.form_submit_button("Save Medication")
+
+            if submitted:
+                if not medication_name.strip() or not dosage.strip() or not frequency.strip():
+                    st.error("Please fill in the medication name, dosage, and frequency.")
+                elif end_date < start_date:
+                    st.error("End date cannot be earlier than start date.")
+                else:
+                    payload = {
+                        "medication_name": medication_name.strip(),
+                        "dosage": dosage.strip(),
+                        "frequency": frequency.strip(),
+                        "start_date": start_date.isoformat(),
+                        "end_date": end_date.isoformat(),
+                        "status": status
+                    }
+
+                    result = api_post(
+                        f"/medications/{patient_id}",
+                        payload
                     )
 
-                    fig.update_layout(
-                        template="plotly_dark",
-                        paper_bgcolor="#0B1120",
-                        plot_bgcolor="#142238"
-                    )
+                    if result is not None:
+                        st.success("Medication added successfully!")
+                        st.rerun()
 
-                    st.plotly_chart(
-                        fig,
-                        use_container_width=True
-                    )
+        st.divider()
+        st.subheader("Medication History")
 
-                # Other vital charts
-                chart_options = {
-                    "temperature": "Temperature (°C)",
-                    "spo2": "SpO2 (%)",
-                    "systolic": "Systolic Pressure (mmHg)",
-                    "diastolic": "Diastolic Pressure (mmHg)"
-                }
-
-                for column, label in chart_options.items():
-
-                    if column in history_df.columns:
-
-                        with st.expander(f"View {label} trend"):
-
-                            fig = px.line(
-                                history_df,
-                                x="recorded_at",
-                                y=column,
-                                markers=True,
-                                labels={
-                                    "recorded_at": "Recorded Time",
-                                    column: label
-                                }
-                            )
-
-                            fig.update_layout(
-                                template="plotly_dark",
-                                paper_bgcolor="#0B1120",
-                                plot_bgcolor="#142238"
-                            )
-
-                            st.plotly_chart(
-                                fig,
-                                use_container_width=True
-                            )
-
-            else:
-                st.info("No vital readings recorded for this patient yet.")
-
-        except requests.RequestException as e:
-            st.error(f"Could not load vital history: {e}")
+        medications = api_get(f"/medications/{patient_id}")
+        show_records(medications)
 
 
-# --------------------------------
-# OTHER MODULES
-# --------------------------------
-
-elif page == "Medications":
-
-    st.subheader("Medication Management")
-    st.info("Medication management will be implemented in the next step.")
+# ==================================================
+# CLINICAL RECORDS
+# ==================================================
 
 elif page == "Clinical Records":
 
-    st.subheader("Clinical Records")
-    st.info("Clinical record management will be implemented in the next step.")
+    st.title("Clinical Records")
+    st.caption("Maintain patient diagnoses, symptoms, and treatment notes")
+
+    options = patient_options()
+
+    if not options:
+        st.warning("No patients available. Register a patient first.")
+    else:
+        selected = st.selectbox(
+            "Select Patient",
+            list(options.keys()),
+            key="clinical_patient"
+        )
+        patient_id = options[selected]
+
+        st.subheader("Add Clinical Record")
+
+        with st.form("clinical_form"):
+
+            record_date = st.date_input(
+                "Record Date",
+                value=date.today()
+            )
+
+            doctor_name = st.text_input("Doctor / Clinician Name")
+            record_type = st.selectbox(
+                "Record Type",
+                [
+                    "Consultation",
+                    "Diagnosis",
+                    "Follow-up",
+                    "Treatment",
+                    "Other"
+                ]
+            )
+
+            diagnosis = st.text_input("Diagnosis")
+            symptoms = st.text_area("Symptoms")
+            treatment = st.text_area("Treatment / Advice")
+            notes = st.text_area("Additional Clinical Notes")
+
+            submitted = st.form_submit_button("Save Clinical Record")
+
+            if submitted:
+                if not diagnosis.strip() and not symptoms.strip() and not notes.strip():
+                    st.error("Enter at least a diagnosis, symptoms, or clinical notes.")
+                else:
+                    payload = {
+                        "record_date": record_date.isoformat(),
+                        "doctor_name": doctor_name.strip(),
+                        "record_type": record_type,
+                        "diagnosis": diagnosis.strip(),
+                        "symptoms": symptoms.strip(),
+                        "treatment": treatment.strip(),
+                        "notes": notes.strip()
+                    }
+
+                    result = api_post(
+                        f"/records/{patient_id}",
+                        payload
+                    )
+
+                    if result is not None:
+                        st.success("Clinical record saved successfully!")
+                        st.rerun()
+
+        st.divider()
+        st.subheader("Clinical History")
+
+        records = api_get(f"/records/{patient_id}")
+        show_records(records)
+
+
+# ==================================================
+# MEDICAL DOCUMENTS
+# ==================================================
 
 elif page == "Medical Documents":
 
-    st.subheader("Medical Documents")
-    st.info("Medical document management will be implemented in the next step.")
+    st.title("Medical Documents")
+    st.caption("Upload and manage patient medical document information")
+
+    options = patient_options()
+
+    if not options:
+        st.warning("No patients available. Register a patient first.")
+    else:
+        selected = st.selectbox(
+            "Select Patient",
+            list(options.keys()),
+            key="document_patient"
+        )
+        patient_id = options[selected]
+
+        st.subheader("Upload Medical Document")
+
+        uploaded_file = st.file_uploader(
+            "Choose a PDF, JPG, or PNG file",
+            type=["pdf", "jpg", "jpeg", "png"]
+        )
+
+        if uploaded_file:
+            st.write("Selected file:", uploaded_file.name)
+            st.write(
+                f"File size: {uploaded_file.size / (1024 * 1024):.2f} MB"
+            )
+
+            if uploaded_file.size > 5 * 1024 * 1024:
+                st.error("File size must not exceed 5 MB.")
+            elif st.button("Upload Document"):
+                try:
+                    files = {
+                        "file": (
+                            uploaded_file.name,
+                            uploaded_file.getvalue(),
+                            uploaded_file.type
+                        )
+                    }
+
+                    response = requests.post(
+                        f"{API_URL}/documents/upload/{patient_id}",
+                        headers=HEADERS,
+                        files=files,
+                        timeout=60
+                    )
+
+                    response.raise_for_status()
+                    st.success("Medical document uploaded successfully!")
+                    st.rerun()
+
+                except requests.exceptions.RequestException as e:
+                    st.error(f"Upload failed: {e}")
+                    if getattr(e, "response", None) is not None:
+                        st.error(e.response.text)
+
+        st.divider()
+        st.subheader("Uploaded Documents")
+
+        documents = api_get(f"/documents/{patient_id}")
+        show_records(documents)
 
